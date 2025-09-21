@@ -13,6 +13,65 @@ st.set_page_config(
     initial_sidebar_state="collapsed",
 )
 
+# Candidate Data
+candidates_data = [
+    {
+        "rank": 2,
+        "name": "Glizzy Gobbler",
+        "power": "113,987,059",
+        "level": 24,
+        "country": "🇺🇸",
+        "kills": "92.2M",
+        "deaths": "512.3K",
+        "likes": 900,
+        "giftLevel": 4
+    },
+    {
+        "rank": 4,
+        "name": "SGunner",
+        "power": "99,337,084",
+        "level": 26,
+        "country": "🇦🇷",
+        "kills": "74.2M",
+        "deaths": "384.0K",
+        "likes": 380,
+        "giftLevel": 6
+    },
+    {
+        "rank": 11,
+        "name": "Kduss",
+        "power": "71,907,600",
+        "level": 25,
+        "country": "🇺🇳",
+        "kills": "49.3M",
+        "deaths": "507.9K",
+        "likes": 508,
+        "giftLevel": 6
+    },
+    {
+        "rank": 12,
+        "name": "GG7991",
+        "power": "71,338,969",
+        "level": 26,
+        "country": "🇺🇸",
+        "kills": "68.0M",
+        "deaths": "530.7K",
+        "likes": 614,
+        "giftLevel": 4
+    },
+    {
+        "rank": 13,
+        "name": "MictlanTecuhtli",
+        "power": "70,365,788",
+        "level": 26,
+        "country": "🇲🇽",
+        "kills": "81.5M",
+        "deaths": "717.5K",
+        "likes": 686,
+        "giftLevel": 6
+    }
+]
+
 # --- Database Setup ---
 DB_FILE = "voting.db"
 
@@ -77,65 +136,6 @@ def save_comment(candidate_name, comment):
 # Load initial data from the database
 votes = load_votes()
 comments = load_comments()
-
-# Candidate Data
-candidates_data = [
-    {
-        "rank": 2,
-        "name": "Glizzy Gobbler",
-        "power": "113,987,059",
-        "level": 24,
-        "country": "🇺🇸",
-        "kills": "92.2M",
-        "deaths": "512.3K",
-        "likes": 900,
-        "giftLevel": 4
-    },
-    {
-        "rank": 4,
-        "name": "SGunner",
-        "power": "99,337,084",
-        "level": 26,
-        "country": "🇦🇷",
-        "kills": "74.2M",
-        "deaths": "384.0K",
-        "likes": 380,
-        "giftLevel": 6
-    },
-    {
-        "rank": 11,
-        "name": "Kduss",
-        "power": "71,907,600",
-        "level": 25,
-        "country": "🇺🇳",
-        "kills": "49.3M",
-        "deaths": "507.9K",
-        "likes": 508,
-        "giftLevel": 6
-    },
-    {
-        "rank": 12,
-        "name": "GG7991",
-        "power": "71,338,969",
-        "level": 26,
-        "country": "🇺🇸",
-        "kills": "68.0M",
-        "deaths": "530.7K",
-        "likes": 614,
-        "giftLevel": 4
-    },
-    {
-        "rank": 13,
-        "name": "MictlanTecuhtli",
-        "power": "70,365,788",
-        "level": 26,
-        "country": "🇲🇽",
-        "kills": "81.5M",
-        "deaths": "717.5K",
-        "likes": 686,
-        "giftLevel": 6
-    }
-]
 
 def get_total_votes():
     return sum(votes.values())
