@@ -2,6 +2,8 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
+import sqlite3
+import atexit
 
 # Page configuration
 st.set_page_config(
@@ -10,6 +12,71 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="collapsed",
 )
+
+# --- Database Setup ---
+DB_FILE = "voting.db"
+
+# Close the database connection when the app exits
+def close_db_connection(conn):
+    print("Closing database connection.")
+    conn.close()
+
+def init_db():
+    conn = sqlite3.connect(DB_FILE)
+    atexit.register(close_db_connection, conn)
+    c = conn.cursor()
+    # Create votes table
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS votes (
+            candidate_name TEXT PRIMARY KEY,
+            vote_count INTEGER NOT NULL DEFAULT 0
+        )
+    ''')
+    # Create comments table
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS comments (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            candidate_name TEXT NOT NULL,
+            comment TEXT NOT NULL
+        )
+    ''')
+    # Add candidates to votes table if they don't exist
+    for candidate in candidates_data:
+        c.execute("INSERT OR IGNORE INTO votes (candidate_name, vote_count) VALUES (?, 0)", (candidate['name'],))
+    conn.commit()
+    return conn
+
+conn = init_db()
+
+# --- Data Loading Functions ---
+def load_votes():
+    c = conn.cursor()
+    c.execute("SELECT candidate_name, vote_count FROM votes")
+    votes = {row[0]: row[1] for row in c.fetchall()}
+    return votes
+
+def load_comments():
+    c = conn.cursor()
+    c.execute("SELECT candidate_name, comment FROM comments")
+    comments = {candidate['name']: [] for candidate in candidates_data}
+    for row in c.fetchall():
+        comments[row[0]].append(row[1])
+    return comments
+
+# --- Data Saving Functions ---
+def save_vote(candidate_name):
+    c = conn.cursor()
+    c.execute("UPDATE votes SET vote_count = vote_count + 1 WHERE candidate_name = ?", (candidate_name,))
+    conn.commit()
+
+def save_comment(candidate_name, comment):
+    c = conn.cursor()
+    c.execute("INSERT INTO comments (candidate_name, comment) VALUES (?, ?)", (candidate_name, comment))
+    conn.commit()
+
+# Load initial data from the database
+votes = load_votes()
+comments = load_comments()
 
 # Candidate Data
 candidates_data = [
@@ -70,19 +137,14 @@ candidates_data = [
     }
 ]
 
-# Initialize session state for votes if it doesn't exist
-if 'votes' not in st.session_state:
-    st.session_state.votes = {candidate['name']: 0 for candidate in candidates_data}
-    st.session_state.comments = {candidate['name']: [] for candidate in candidates_data}
-
 def get_total_votes():
-    return sum(st.session_state.votes.values())
+    return sum(votes.values())
 
 def get_vote_percentage(candidate_name):
     total = get_total_votes()
     if total == 0:
         return 0
-    return (st.session_state.votes.get(candidate_name, 0) / total * 100)
+    return (votes.get(candidate_name, 0) / total * 100)
 
 # --- UI ---
 
@@ -101,14 +163,14 @@ st.markdown(f"""
 
 
 # Sorting candidates based on votes
-sorted_candidates = sorted(candidates_data, key=lambda c: st.session_state.votes.get(c['name'], 0), reverse=True)
+sorted_candidates = sorted(candidates_data, key=lambda c: votes.get(c['name'], 0), reverse=True)
 
 # Display candidates in a responsive grid
 cols = st.columns(3)
 for i, candidate in enumerate(sorted_candidates):
     with cols[i % 3]:
         with st.container(border=True):
-            is_leader = (i == 0 and st.session_state.votes.get(candidate['name'], 0) > 0)
+            is_leader = (i == 0 and votes.get(candidate['name'], 0) > 0)
             
             st.markdown(f"""
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
@@ -139,7 +201,7 @@ for i, candidate in enumerate(sorted_candidates):
             percentage = get_vote_percentage(candidate_name)
             
             st.progress(int(percentage))
-            st.markdown(f"Votes: **{st.session_state.votes.get(candidate_name, 0)}** ({percentage:.1f}%)")
+            st.markdown(f"Votes: **{votes.get(candidate_name, 0)}** ({percentage:.1f}%)")
 
             # Vote and comment section
             if 'voted_for' not in st.session_state:
@@ -148,20 +210,20 @@ for i, candidate in enumerate(sorted_candidates):
             has_voted = st.session_state.voted_for.get(candidate_name, False)
             
             if not has_voted:
-                comment = st.text_area("Add a comment (optional)", key=f"comment_{candidate_name}")
+                comment_text = st.text_area("Add a comment (optional)", key=f"comment_{candidate_name}")
                 if st.button("🗳️ Vote for R4", key=f"vote_{candidate_name}", use_container_width=True):
-                    st.session_state.votes[candidate_name] += 1
+                    save_vote(candidate_name)
                     st.session_state.voted_for[candidate_name] = True
-                    if comment:
-                        st.session_state.comments[candidate_name].append(comment)
+                    if comment_text:
+                        save_comment(candidate_name, comment_text)
                     st.rerun()
             else:
                 st.button("✅ Voted", key=f"vote_{candidate_name}", use_container_width=True, disabled=True)
 
             # Display comments
-            if st.session_state.comments[candidate_name]:
+            if comments[candidate_name]:
                 with st.expander("View Comments"):
-                    for c in st.session_state.comments[candidate_name]:
+                    for c in comments[candidate_name]:
                         st.info(c)
 
 st.divider()
@@ -263,8 +325,8 @@ with tab3:
 if get_total_votes() > 0:
     st.header("📈 Vote Distribution")
     vote_data = {
-        'Candidate': list(st.session_state.votes.keys()),
-        'Votes': list(st.session_state.votes.values())
+        'Candidate': list(votes.keys()),
+        'Votes': list(votes.values())
     }
     vote_df = pd.DataFrame(vote_data).sort_values('Votes', ascending=True)
 
@@ -312,7 +374,7 @@ with st.container(border=True):
     
     for i, candidate in enumerate(sorted_candidates):
         candidate_name = candidate['name']
-        votes = st.session_state.votes.get(candidate_name, 0)
+        vote_count = votes.get(candidate_name, 0)
         percentage = get_vote_percentage(candidate_name)
             
         medal = ""
@@ -331,7 +393,7 @@ with st.container(border=True):
                 </div>
             </div>
             <div style="text-align: right;">
-                <div style="font-weight: bold;">{votes} votes</div>
+                <div style="font-weight: bold;">{vote_count} votes</div>
                 <div style="font-size: 0.875rem; color: #D1D5DB;">{percentage:.1f}%</div>
             </div>
         </div>
