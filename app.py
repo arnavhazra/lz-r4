@@ -162,10 +162,156 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 
+# --- Visualizations ---
+
+# Configuration for static Plotly charts
+static_chart_config = {'staticPlot': True, 'displayModeBar': False}
+
+# Candidate Stats Comparison
+st.header("⚔️ Candidate Stats Comparison")
+
+# Data prep for charts
+def clean_value(value):
+    if isinstance(value, str):
+        return float(value.replace(',', '').replace('M', 'e6').replace('K', 'e3'))
+    return float(value)
+
+stats_df = pd.DataFrame(candidates_data)
+stats_to_compare = ['power', 'kills', 'deaths', 'likes', 'giftLevel']
+stats_labels = ['AvA points', 'HQ Power', 'Kills', 'Likes', 'Gift Level']
+for col in stats_to_compare:
+    stats_df[col] = stats_df[col].apply(clean_value)
+
+# Create tabs for different chart types
+tab1, tab2, tab3 = st.tabs(["Overall Comparison (Radar)", "Stat Breakdown (Bars)", "Correlation Analysis (Scatter)"])
+
+with tab1:
+    # Create radar chart
+    fig_radar = go.Figure()
+    
+    # Normalize data for radar chart
+    normalized_stats_df = stats_df.copy()
+    for col in stats_to_compare:
+        normalized_stats_df[col] = (stats_df[col] - stats_df[col].min()) / (stats_df[col].max() - stats_df[col].min())
+    
+    for i, row in normalized_stats_df.iterrows():
+        fig_radar.add_trace(go.Scatterpolar(
+            r=row[stats_to_compare].values,
+            theta=stats_labels,
+            fill='toself',
+            name=row['name']
+        ))
+    
+    fig_radar.update_layout(
+        polar=dict(
+            radialaxis=dict(
+                visible=True,
+                range=[0, 1]
+            )
+        ),
+        showlegend=True,
+        title="Candidate Stats Radar Chart"
+    )
+    st.plotly_chart(fig_radar, use_container_width=True, config=static_chart_config)
+
+with tab2:
+    st.subheader("Individual Stat Comparisons")
+    
+    # Melt the DataFrame to make it suitable for faceting
+    stats_melted = stats_df.melt(id_vars='name', value_vars=['power', 'kills', 'deaths'],
+                                 var_name='stat', value_name='value')
+    
+    # Map stat names to the correct labels
+    stat_label_map = {'power': 'AvA Points', 'kills': 'HQ Power', 'deaths': 'Kills'}
+    stats_melted['stat'] = stats_melted['stat'].map(stat_label_map)
+
+    fig_bar_facet = px.bar(
+        stats_melted,
+        x='value',
+        y='name',
+        color='name',
+        facet_col='stat',
+        orientation='h',
+        labels={'value': 'Value', 'name': 'Candidate'},
+        text='value'
+    )
+    fig_bar_facet.update_xaxes(matches=None) # Allow x-axes to have different scales
+    fig_bar_facet.update_traces(texttemplate='%{text:.2s}', textposition='inside')
+    fig_bar_facet.update_layout(title="Comparison of Key Stats", showlegend=False)
+    st.plotly_chart(fig_bar_facet, use_container_width=True, config=static_chart_config)
+
+
+with tab3:
+    st.subheader("HQ Power vs. Kills")
+    fig_scatter = px.scatter(
+        stats_df,
+        x='kills',
+        y='deaths',
+        size='power',
+        color='name',
+        hover_name='name',
+        labels={
+            'kills': 'HQ Power',
+            'deaths': 'Kills',
+            'power': 'AvA Points'
+        },
+        title="Correlation between HQ Power and Kills"
+    )
+    st.plotly_chart(fig_scatter, use_container_width=True, config=static_chart_config)
+
+
+# Vote Distribution
+if get_total_votes() > 0:
+    st.header("📈 Vote Distribution")
+    vote_data = {
+        'Candidate': list(votes.keys()),
+        'Votes': list(votes.values())
+    }
+    vote_df = pd.DataFrame(vote_data).sort_values('Votes', ascending=True)
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.subheader("Votes per Candidate")
+        fig_bar = px.bar(
+            vote_df,
+            x='Votes',
+            y='Candidate',
+            orientation='h',
+            text='Votes',
+            color='Votes',
+            color_continuous_scale=px.colors.sequential.Viridis
+        )
+        fig_bar.update_traces(textposition='inside')
+        fig_bar.update_layout(
+            xaxis_title="Number of Votes",
+            yaxis_title="Candidate",
+            showlegend=False,
+            height=400,
+            uniformtext_minsize=8, 
+            uniformtext_mode='hide'
+        )
+        st.plotly_chart(fig_bar, use_container_width=True, config=static_chart_config)
+
+    with col2:
+        st.subheader("Vote Percentage")
+        fig_pie = px.pie(
+            vote_df,
+            names='Candidate',
+            values='Votes',
+            hole=0.4,
+            color_discrete_sequence=px.colors.sequential.Viridis_r
+        )
+        fig_pie.update_traces(textposition='inside', textinfo='percent+label')
+        fig_pie.update_layout(showlegend=False, height=400)
+        st.plotly_chart(fig_pie, use_container_width=True, config=static_chart_config)
+
+
 # Sorting candidates based on votes
 sorted_candidates = sorted(candidates_data, key=lambda c: votes.get(c['name'], 0), reverse=True)
 
 # Display candidates in a responsive grid
+st.header("🗳️ Cast Your Vote")
 cols = st.columns(3)
 for i, candidate in enumerate(sorted_candidates):
     with cols[i % 3]:
@@ -227,146 +373,6 @@ for i, candidate in enumerate(sorted_candidates):
                         st.info(c)
 
 st.divider()
-
-# Candidate Stats Comparison
-st.header("⚔️ Candidate Stats Comparison")
-
-# Data prep for radar chart
-def clean_value(value):
-    if isinstance(value, str):
-        return float(value.replace(',', '').replace('M', 'e6').replace('K', 'e3'))
-    return float(value)
-
-stats_df = pd.DataFrame(candidates_data)
-stats_to_compare = ['power', 'kills', 'deaths', 'likes', 'giftLevel']
-stats_labels = ['AvA points', 'HQ Power', 'Kills', 'Likes', 'Gift Level']
-for col in stats_to_compare:
-    stats_df[col] = stats_df[col].apply(clean_value)
-
-# Create tabs for different chart types
-tab1, tab2, tab3 = st.tabs(["Overall Comparison (Radar)", "Stat Breakdown (Bars)", "Correlation Analysis (Scatter)"])
-
-with tab1:
-    # Create radar chart
-    fig_radar = go.Figure()
-    
-    # Normalize data for radar chart
-    normalized_stats_df = stats_df.copy()
-    for col in stats_to_compare:
-        normalized_stats_df[col] = (stats_df[col] - stats_df[col].min()) / (stats_df[col].max() - stats_df[col].min())
-    
-    for i, row in normalized_stats_df.iterrows():
-        fig_radar.add_trace(go.Scatterpolar(
-            r=row[stats_to_compare].values,
-            theta=stats_labels,
-            fill='toself',
-            name=row['name']
-        ))
-    
-    fig_radar.update_layout(
-        polar=dict(
-            radialaxis=dict(
-                visible=True,
-                range=[0, 1]
-            )
-        ),
-        showlegend=True,
-        title="Candidate Stats Radar Chart"
-    )
-    st.plotly_chart(fig_radar, use_container_width=True)
-
-with tab2:
-    st.subheader("Individual Stat Comparisons")
-    
-    # Melt the DataFrame to make it suitable for faceting
-    stats_melted = stats_df.melt(id_vars='name', value_vars=['power', 'kills', 'deaths'],
-                                 var_name='stat', value_name='value')
-    
-    # Map stat names to the correct labels
-    stat_label_map = {'power': 'AvA Points', 'kills': 'HQ Power', 'deaths': 'Kills'}
-    stats_melted['stat'] = stats_melted['stat'].map(stat_label_map)
-
-    fig_bar_facet = px.bar(
-        stats_melted,
-        x='value',
-        y='name',
-        color='name',
-        facet_col='stat',
-        orientation='h',
-        labels={'value': 'Value', 'name': 'Candidate'},
-        text='value'
-    )
-    fig_bar_facet.update_xaxes(matches=None) # Allow x-axes to have different scales
-    fig_bar_facet.update_traces(texttemplate='%{text:.2s}', textposition='inside')
-    fig_bar_facet.update_layout(title="Comparison of Key Stats", showlegend=False)
-    st.plotly_chart(fig_bar_facet, use_container_width=True)
-
-
-with tab3:
-    st.subheader("HQ Power vs. Kills")
-    fig_scatter = px.scatter(
-        stats_df,
-        x='kills',
-        y='deaths',
-        size='power',
-        color='name',
-        hover_name='name',
-        labels={
-            'kills': 'HQ Power',
-            'deaths': 'Kills',
-            'power': 'AvA Points'
-        },
-        title="Correlation between HQ Power and Kills"
-    )
-    st.plotly_chart(fig_scatter, use_container_width=True)
-
-
-# Vote Distribution
-if get_total_votes() > 0:
-    st.header("📈 Vote Distribution")
-    vote_data = {
-        'Candidate': list(votes.keys()),
-        'Votes': list(votes.values())
-    }
-    vote_df = pd.DataFrame(vote_data).sort_values('Votes', ascending=True)
-
-    col1, col2 = st.columns(2)
-
-    with col1:
-        st.subheader("Votes per Candidate")
-        fig_bar = px.bar(
-            vote_df,
-            x='Votes',
-            y='Candidate',
-            orientation='h',
-            text='Votes',
-            color='Votes',
-            color_continuous_scale=px.colors.sequential.Viridis
-        )
-        fig_bar.update_traces(textposition='inside')
-        fig_bar.update_layout(
-            xaxis_title="Number of Votes",
-            yaxis_title="Candidate",
-            showlegend=False,
-            height=400,
-            uniformtext_minsize=8, 
-            uniformtext_mode='hide'
-        )
-        st.plotly_chart(fig_bar, use_container_width=True)
-
-    with col2:
-        st.subheader("Vote Percentage")
-        fig_pie = px.pie(
-            vote_df,
-            names='Candidate',
-            values='Votes',
-            hole=0.4,
-            color_discrete_sequence=px.colors.sequential.Viridis_r
-        )
-        fig_pie.update_traces(textposition='inside', textinfo='percent+label')
-        fig_pie.update_layout(showlegend=False, height=400)
-        st.plotly_chart(fig_pie, use_container_width=True)
-
 
 # Current Rankings
 with st.container(border=True):
